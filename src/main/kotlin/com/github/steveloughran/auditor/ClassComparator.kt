@@ -76,6 +76,13 @@ object ClassComparator {
     }
     for (key in tgtByKey.keys - refByKey.keys) {
       diffs.add(ClassDifference(className, DifferenceType.METHOD_ADDED, "${key.first}${key.second}"))
+      if (level >= AuditLevel.SEMANTIC) {
+        val tgtMethod = tgtByKey[key]!!
+        for (call in SuspiciousPatterns.scan(tgtMethod.instructions)) {
+          diffs.add(ClassDifference(className, DifferenceType.SUSPICIOUS_INSTRUCTION,
+            "${key.first}${key.second} [${call.category}] ${call.instruction}"))
+        }
+      }
     }
 
     if (level >= AuditLevel.BYTECODE) {
@@ -85,6 +92,14 @@ object ClassComparator {
         if (refMethod.instructions != tgtMethod.instructions) {
           diffs.add(ClassDifference(className, DifferenceType.BYTECODE_CHANGED,
             "${key.first}${key.second}"))
+          if (level >= AuditLevel.SEMANTIC) {
+            for (call in SuspiciousPatterns.findNewSuspiciousInstructions(
+              refMethod.instructions, tgtMethod.instructions
+            )) {
+              diffs.add(ClassDifference(className, DifferenceType.SUSPICIOUS_INSTRUCTION,
+                "${key.first}${key.second} [${call.category}] ${call.instruction}"))
+            }
+          }
         }
       }
     }
@@ -118,6 +133,7 @@ enum class DifferenceType(val text: String) {
   FIELD_REMOVED("field removed"),
   FIELD_ADDED("field added"),
   BYTECODE_CHANGED("bytecode changed"),
+  SUSPICIOUS_INSTRUCTION("suspicious instruction"),
 }
 
 data class ClassDifference(

@@ -306,6 +306,97 @@ class ClassComparatorTest {
   }
 
   @Test
+  fun `level 3 flags suspicious instructions in modified methods`() {
+    val ref = structure(methods = listOf(
+      ClassStructure.MethodInfo("init", "()V", 1, listOf("ALOAD 0", "RETURN")),
+    ))
+    val tgt = structure(methods = listOf(
+      ClassStructure.MethodInfo("init", "()V", 1, listOf(
+        "ALOAD 0",
+        "INVOKEVIRTUAL java/lang/Runtime.exec(Ljava/lang/String;)Ljava/lang/Process;",
+        "RETURN",
+      )),
+    ))
+    val report = ClassComparator.compare(
+      mapOf(ref.className to ref),
+      mapOf(tgt.className to tgt),
+      AuditLevel.SEMANTIC,
+    )
+    assertThat(report.differences)
+      .anyMatch { it.type == DifferenceType.BYTECODE_CHANGED }
+    assertThat(report.differences)
+      .anyMatch { it.type == DifferenceType.SUSPICIOUS_INSTRUCTION }
+    assertThat(report.differences.filter { it.type == DifferenceType.SUSPICIOUS_INSTRUCTION })
+      .anyMatch { it.symbol.contains("process execution") }
+  }
+
+  @Test
+  fun `level 3 flags suspicious instructions in added methods`() {
+    val ref = structure(methods = emptyList())
+    val tgt = structure(methods = listOf(
+      ClassStructure.MethodInfo("backdoor", "()V", 1, listOf(
+        "NEW java/net/Socket",
+        "RETURN",
+      )),
+    ))
+    val report = ClassComparator.compare(
+      mapOf(ref.className to ref),
+      mapOf(tgt.className to tgt),
+      AuditLevel.SEMANTIC,
+    )
+    assertThat(report.differences)
+      .anyMatch { it.type == DifferenceType.METHOD_ADDED }
+    assertThat(report.differences)
+      .anyMatch { it.type == DifferenceType.SUSPICIOUS_INSTRUCTION }
+    assertThat(report.differences.filter { it.type == DifferenceType.SUSPICIOUS_INSTRUCTION })
+      .anyMatch { it.symbol.contains("network access") }
+  }
+
+  @Test
+  fun `level 3 does not flag existing suspicious calls in reference`() {
+    val instructions = listOf(
+      "INVOKEVIRTUAL java/lang/Thread.start()V",
+      "RETURN",
+    )
+    val ref = structure(methods = listOf(
+      ClassStructure.MethodInfo("run", "()V", 1, instructions),
+    ))
+    val tgt = structure(methods = listOf(
+      ClassStructure.MethodInfo("run", "()V", 1, instructions),
+    ))
+    val report = ClassComparator.compare(
+      mapOf(ref.className to ref),
+      mapOf(tgt.className to tgt),
+      AuditLevel.SEMANTIC,
+    )
+    assertThat(report.differences.filter { it.type == DifferenceType.SUSPICIOUS_INSTRUCTION })
+      .isEmpty()
+  }
+
+  @Test
+  fun `level 2 does not flag suspicious instructions`() {
+    val ref = structure(methods = listOf(
+      ClassStructure.MethodInfo("init", "()V", 1, listOf("ALOAD 0", "RETURN")),
+    ))
+    val tgt = structure(methods = listOf(
+      ClassStructure.MethodInfo("init", "()V", 1, listOf(
+        "ALOAD 0",
+        "INVOKEVIRTUAL java/lang/Runtime.exec(Ljava/lang/String;)Ljava/lang/Process;",
+        "RETURN",
+      )),
+    ))
+    val report = ClassComparator.compare(
+      mapOf(ref.className to ref),
+      mapOf(tgt.className to tgt),
+      AuditLevel.BYTECODE,
+    )
+    assertThat(report.differences)
+      .anyMatch { it.type == DifferenceType.BYTECODE_CHANGED }
+    assertThat(report.differences)
+      .noneMatch { it.type == DifferenceType.SUSPICIOUS_INSTRUCTION }
+  }
+
+  @Test
   fun `AuditLevel parse`() {
     assertThat(AuditLevel.parse("1")).isEqualTo(AuditLevel.STRUCTURAL)
     assertThat(AuditLevel.parse("2")).isEqualTo(AuditLevel.BYTECODE)
