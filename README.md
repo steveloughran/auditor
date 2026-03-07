@@ -64,3 +64,12 @@ This tool proposes to assist auditing with a goal of verifying that compiled art
 - tests are junit 6
 - logging is slf4J api with a log4j 2 back end
 - 
+
+ 
+# Test JARs and provenance
+
+| path                       | provenance            |
+|----------------------------|-----------------------|
+| data/good/log4j-1.2.17.jar | cloudera sanitized    |
+| data/bad/log4j-1.2.17.jar  | original and insecure |
+

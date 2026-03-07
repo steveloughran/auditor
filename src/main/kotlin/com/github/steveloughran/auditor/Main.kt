@@ -24,15 +24,29 @@ fun main(args: Array<String>) {
         exitProcess(1)
     }
 
-    println("Analyzing reference: $referencePath")
-    val reference = JarAnalyzer.analyze(referencePath)
+    val refMd5 = JarAnalyzer.md5(referencePath)
+    val tgtMd5 = JarAnalyzer.md5(targetPath)
+    println("Reference: $referencePath (MD5: $refMd5)")
+    println("Target:    $targetPath (MD5: $tgtMd5)")
 
-    println("Analyzing target:    $targetPath")
+    if (refMd5 == tgtMd5) {
+        println()
+        println("JARs are byte-identical (MD5 match). No further analysis needed.")
+        exitProcess(0)
+    }
+
+    println()
+    println("MD5 checksums differ. Performing structural comparison...")
+    println()
+
+    val reference = JarAnalyzer.analyze(referencePath)
     val target = JarAnalyzer.analyze(targetPath)
 
     val report = ClassComparator.compare(reference, target)
-    println()
     print(report.summary())
+    if (!report.isMatch) {
+        print(report.csv())
+    }
 
     exitProcess(if (report.isMatch) 0 else 1)
 }

@@ -1,9 +1,7 @@
 package com.github.steveloughran.auditor
 
+import org.assertj.core.api.Assertions.assertThat
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class ClassComparatorTest {
 
@@ -30,8 +28,8 @@ class ClassComparatorTest {
             ClassStructure.MethodInfo("bar", "(I)I", 1),
         ))
         val report = ClassComparator.compare(mapOf(s.className to s), mapOf(s.className to s))
-        assertTrue(report.isMatch)
-        assertEquals(0, report.differences.size)
+        assertThat(report.isMatch).isTrue()
+        assertThat(report.differences).isEmpty()
     }
 
     @Test
@@ -41,9 +39,9 @@ class ClassComparatorTest {
             mapOf(s.className to s),
             emptyMap(),
         )
-        assertFalse(report.isMatch)
-        assertEquals(1, report.differences.size)
-        assertEquals(DifferenceType.MISSING_IN_TARGET, report.differences[0].type)
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences).hasSize(1)
+        assertThat(report.differences[0].type).isEqualTo(DifferenceType.MISSING_IN_TARGET)
     }
 
     @Test
@@ -53,9 +51,9 @@ class ClassComparatorTest {
             emptyMap(),
             mapOf(s.className to s),
         )
-        assertFalse(report.isMatch)
-        assertEquals(1, report.differences.size)
-        assertEquals(DifferenceType.EXTRA_IN_TARGET, report.differences[0].type)
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences).hasSize(1)
+        assertThat(report.differences[0].type).isEqualTo(DifferenceType.EXTRA_IN_TARGET)
     }
 
     @Test
@@ -66,8 +64,9 @@ class ClassComparatorTest {
             mapOf(ref.className to ref),
             mapOf(tgt.className to tgt),
         )
-        assertFalse(report.isMatch)
-        assertTrue(report.differences.any { it.type == DifferenceType.SUPERCLASS_CHANGED })
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences)
+            .anyMatch { it.type == DifferenceType.SUPERCLASS_CHANGED }
     }
 
     @Test
@@ -78,8 +77,9 @@ class ClassComparatorTest {
             mapOf(ref.className to ref),
             mapOf(tgt.className to tgt),
         )
-        assertFalse(report.isMatch)
-        assertTrue(report.differences.any { it.type == DifferenceType.INTERFACES_CHANGED })
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences)
+            .anyMatch { it.type == DifferenceType.INTERFACES_CHANGED }
     }
 
     @Test
@@ -95,9 +95,11 @@ class ClassComparatorTest {
             mapOf(ref.className to ref),
             mapOf(tgt.className to tgt),
         )
-        assertFalse(report.isMatch)
-        assertTrue(report.differences.any { it.type == DifferenceType.METHOD_ADDED })
-        assertTrue(report.differences.any { it.detail.contains("evil") })
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences)
+            .anyMatch { it.type == DifferenceType.METHOD_ADDED }
+        assertThat(report.differences)
+            .anyMatch { it.symbol.contains("evil") }
     }
 
     @Test
@@ -113,8 +115,9 @@ class ClassComparatorTest {
             mapOf(ref.className to ref),
             mapOf(tgt.className to tgt),
         )
-        assertFalse(report.isMatch)
-        assertTrue(report.differences.any { it.type == DifferenceType.METHOD_REMOVED })
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences)
+            .anyMatch { it.type == DifferenceType.METHOD_REMOVED }
     }
 
     @Test
@@ -127,8 +130,9 @@ class ClassComparatorTest {
             mapOf(ref.className to ref),
             mapOf(tgt.className to tgt),
         )
-        assertFalse(report.isMatch)
-        assertTrue(report.differences.any { it.type == DifferenceType.FIELD_ADDED })
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences)
+            .anyMatch { it.type == DifferenceType.FIELD_ADDED }
     }
 
     @Test
@@ -141,27 +145,51 @@ class ClassComparatorTest {
             mapOf(ref.className to ref),
             mapOf(tgt.className to tgt),
         )
-        assertFalse(report.isMatch)
-        assertTrue(report.differences.any { it.type == DifferenceType.FIELD_REMOVED })
+        assertThat(report.isMatch).isFalse()
+        assertThat(report.differences)
+            .anyMatch { it.type == DifferenceType.FIELD_REMOVED }
     }
 
     @Test
     fun `report summary for matching JARs`() {
         val s = structure()
         val report = ClassComparator.compare(mapOf(s.className to s), mapOf(s.className to s))
-        val summary = report.summary()
-        assertTrue(summary.contains("OK"))
-        assertTrue(summary.contains("Differences:       0"))
+        assertThat(report.summary()).contains("OK", "Differences:       0")
+        assertThat(report.csv()).isEqualTo("\"class\",\"change\",\"symbol\"\n")
     }
 
     @Test
-    fun `report summary for mismatched JARs`() {
+    fun `csv output has header and rows`() {
+        val ref = structure(methods = listOf(
+            ClassStructure.MethodInfo("foo", "()V", 1),
+        ))
+        val tgt = structure(methods = listOf(
+            ClassStructure.MethodInfo("foo", "()V", 1),
+            ClassStructure.MethodInfo("evil", "()V", 1),
+        ))
+        val report = ClassComparator.compare(
+            mapOf(ref.className to ref),
+            mapOf(tgt.className to tgt),
+        )
+        val csv = report.csv()
+        val lines = csv.trimEnd().lines()
+        assertThat(lines[0]).isEqualTo("\"class\",\"change\",\"symbol\"")
+        assertThat(lines).hasSize(2)
+        assertThat(lines[1]).contains("com/example/Foo")
+        assertThat(lines[1]).contains("METHOD_ADDED")
+        assertThat(lines[1]).contains("evil")
+    }
+
+    @Test
+    fun `csv output for mismatched JARs`() {
         val report = ClassComparator.compare(
             mapOf("A" to structure(name = "A")),
             mapOf("B" to structure(name = "B")),
         )
-        val summary = report.summary()
-        assertTrue(summary.contains("MISSING_IN_TARGET"))
-        assertTrue(summary.contains("EXTRA_IN_TARGET"))
+        val csv = report.csv()
+        val lines = csv.trimEnd().lines()
+        assertThat(lines).hasSize(3) // header + 2 differences
+        assertThat(csv).contains("MISSING_IN_TARGET")
+        assertThat(csv).contains("EXTRA_IN_TARGET")
     }
 }

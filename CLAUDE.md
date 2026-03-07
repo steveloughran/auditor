@@ -23,13 +23,14 @@ The tool compares `.class` files from a distributed JAR against those compiled f
 
 ## Development guidelines
 
-- Build with `./gradlew build`
+- Build with `./gradlew uberJar` (when user says "build", always create the uber jar)
 - Run tests with `./gradlew test`
 - Follow Kotlin official code style (`kotlin.code.style=official`)
 - Source goes in `src/main/kotlin/`, tests in `src/test/kotlin/`
 - Use the ASM library or parsing for `.class` file analysis
 - Keep the tool usable as both a CLI and a library
 - classes go in inder the package com.github.steveloughran.auditor
+- use assertj for test assertions
 
 ## Key concepts
 
@@ -37,3 +38,12 @@ The tool compares `.class` files from a distributed JAR against those compiled f
 - **JAR analysis:** Extract and enumerate `.class` files from JAR/ZIP archives
 - **Source correlation:** Map `.class` files back to source files accounting for inner classes, anonymous classes, etc.
 - **Threat model:** A malicious release manager with commit access who builds and signs tampered artifacts
+
+Algorithm
+
+- when first comparing two jars, perform an md5 checksum on each and report if they are identical -and skip the validation
+- scan each class looking for changes in imports, methods or symbols
+
+make the output csv formatted with headers "class", "change", "symbol", with contents as appropriate 
+
+whenever I say "build", create the uber jar

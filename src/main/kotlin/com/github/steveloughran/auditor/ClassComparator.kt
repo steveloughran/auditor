@@ -21,10 +21,10 @@ object ClassComparator {
         val common = reference.keys.intersect(target.keys)
 
         for (name in onlyInReference) {
-            differences.add(ClassDifference(name, DifferenceType.MISSING_IN_TARGET, "Class only in reference"))
+            differences.add(ClassDifference(name, DifferenceType.MISSING_IN_TARGET, ""))
         }
         for (name in onlyInTarget) {
-            differences.add(ClassDifference(name, DifferenceType.EXTRA_IN_TARGET, "Class only in target"))
+            differences.add(ClassDifference(name, DifferenceType.EXTRA_IN_TARGET, ""))
         }
         for (name in common.sorted()) {
             differences.addAll(compareClasses(name, reference[name]!!, target[name]!!))
@@ -46,11 +46,11 @@ object ClassComparator {
 
         if (ref.superClass != tgt.superClass) {
             diffs.add(ClassDifference(name, DifferenceType.SUPERCLASS_CHANGED,
-                "superclass: ${ref.superClass} -> ${tgt.superClass}"))
+                "${ref.superClass} -> ${tgt.superClass}"))
         }
         if (ref.interfaces.sorted() != tgt.interfaces.sorted()) {
             diffs.add(ClassDifference(name, DifferenceType.INTERFACES_CHANGED,
-                "interfaces: ${ref.interfaces} -> ${tgt.interfaces}"))
+                "${ref.interfaces.sorted()} -> ${tgt.interfaces.sorted()}"))
         }
 
         compareMethods(name, ref.methods, tgt.methods, diffs)
@@ -69,12 +69,10 @@ object ClassComparator {
         val tgtSet = tgtMethods.map { it.name to it.descriptor }.toSet()
 
         for ((name, desc) in refSet - tgtSet) {
-            diffs.add(ClassDifference(className, DifferenceType.METHOD_REMOVED,
-                "method removed: $name$desc"))
+            diffs.add(ClassDifference(className, DifferenceType.METHOD_REMOVED, "$name$desc"))
         }
         for ((name, desc) in tgtSet - refSet) {
-            diffs.add(ClassDifference(className, DifferenceType.METHOD_ADDED,
-                "method added: $name$desc"))
+            diffs.add(ClassDifference(className, DifferenceType.METHOD_ADDED, "$name$desc"))
         }
     }
 
@@ -88,12 +86,10 @@ object ClassComparator {
         val tgtSet = tgtFields.map { it.name to it.descriptor }.toSet()
 
         for ((name, desc) in refSet - tgtSet) {
-            diffs.add(ClassDifference(className, DifferenceType.FIELD_REMOVED,
-                "field removed: $name $desc"))
+            diffs.add(ClassDifference(className, DifferenceType.FIELD_REMOVED, "$name $desc"))
         }
         for ((name, desc) in tgtSet - refSet) {
-            diffs.add(ClassDifference(className, DifferenceType.FIELD_ADDED,
-                "field added: $name $desc"))
+            diffs.add(ClassDifference(className, DifferenceType.FIELD_ADDED, "$name $desc"))
         }
     }
 }
@@ -112,7 +108,7 @@ enum class DifferenceType {
 data class ClassDifference(
     val className: String,
     val type: DifferenceType,
-    val detail: String,
+    val symbol: String,
 )
 
 data class ComparisonReport(
@@ -123,19 +119,26 @@ data class ComparisonReport(
     val isMatch: Boolean get() = differences.isEmpty()
 
     fun summary(): String = buildString {
-        appendLine("Comparison Report")
-        appendLine("=================")
-        appendLine("Reference classes: $referenceClassCount")
-        appendLine("Target classes:    $targetClassCount")
-        appendLine("Differences:       ${differences.size}")
-        if (differences.isNotEmpty()) {
-            appendLine()
-            for (diff in differences) {
-                appendLine("  [${diff.type}] ${diff.className}: ${diff.detail}")
-            }
+        appendLine("# Reference classes: $referenceClassCount")
+        appendLine("# Target classes:    $targetClassCount")
+        appendLine("# Differences:       ${differences.size}")
+        if (differences.isEmpty()) {
+            appendLine("# OK: All classes match structurally.")
+        }
+    }
+
+    fun csv(): String = buildString {
+        appendLine("\"class\",\"change\",\"symbol\"")
+        for (diff in differences) {
+            appendLine("${csvField(diff.className)},${csvField(diff.type.name)},${csvField(diff.symbol)}")
+        }
+    }
+
+    private fun csvField(value: String): String {
+        return if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+            "\"${value.replace("\"", "\"\"")}\""
         } else {
-            appendLine()
-            appendLine("OK: All classes match structurally.")
+            "\"$value\""
         }
     }
 }

@@ -17,6 +17,7 @@ repositories {
 dependencies {
     implementation("org.ow2.asm:asm:9.7.1")
     testImplementation(kotlin("test"))
+    testImplementation("org.assertj:assertj-core:3.27.3")
 }
 
 kotlin {
