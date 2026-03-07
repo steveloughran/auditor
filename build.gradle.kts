@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.github.steveloughran"
-version = "1.0-SNAPSHOT"
+version = "1.1-SNAPSHOT"
 
 application {
   mainClass.set("com.github.steveloughran.auditor.MainKt")
@@ -42,4 +42,21 @@ tasks.register<Jar>("uberJar") {
       .filter { it.name.endsWith(".jar") }
       .map { zipTree(it) }
   })
+}
+
+tasks.register<Exec>("githubRelease") {
+  dependsOn("uberJar")
+  group = "publishing"
+  description = "Create a GitHub release and upload the uber JAR"
+
+  val tag = "v${project.version}"
+  val uberJar = tasks.named<Jar>("uberJar").get().archiveFile.get().asFile
+  val releaseNotes = project.findProperty("releaseNotes")?.toString() ?: "Release $tag"
+
+  commandLine(
+    "gh", "release", "create", tag,
+    uberJar.absolutePath,
+    "--title", tag,
+    "--notes", releaseNotes,
+  )
 }
