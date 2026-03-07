@@ -151,10 +151,25 @@ class ClassComparatorTest {
     }
 
     @Test
-    fun `report summary for matching JARs`() {
+    fun `text output for matching JARs`() {
         val s = structure()
         val report = ClassComparator.compare(mapOf(s.className to s), mapOf(s.className to s))
-        assertThat(report.summary()).contains("OK", "Differences:       0")
+        assertThat(report.text()).contains("OK", "Differences:       0")
+    }
+
+    @Test
+    fun `text output for mismatched JARs`() {
+        val report = ClassComparator.compare(
+            mapOf("A" to structure(name = "A")),
+            mapOf("B" to structure(name = "B")),
+        )
+        assertThat(report.text()).contains("missing in target", "extra in target")
+    }
+
+    @Test
+    fun `csv output for matching JARs`() {
+        val s = structure()
+        val report = ClassComparator.compare(mapOf(s.className to s), mapOf(s.className to s))
         assertThat(report.csv()).isEqualTo("\"class\",\"change\",\"symbol\"\n")
     }
 
@@ -175,9 +190,7 @@ class ClassComparatorTest {
         val lines = csv.trimEnd().lines()
         assertThat(lines[0]).isEqualTo("\"class\",\"change\",\"symbol\"")
         assertThat(lines).hasSize(2)
-        assertThat(lines[1]).contains("com/example/Foo")
-        assertThat(lines[1]).contains("METHOD_ADDED")
-        assertThat(lines[1]).contains("evil")
+        assertThat(lines[1]).contains("com/example/Foo", "method added", "evil")
     }
 
     @Test
@@ -188,8 +201,54 @@ class ClassComparatorTest {
         )
         val csv = report.csv()
         val lines = csv.trimEnd().lines()
-        assertThat(lines).hasSize(3) // header + 2 differences
-        assertThat(csv).contains("MISSING_IN_TARGET")
-        assertThat(csv).contains("EXTRA_IN_TARGET")
+        assertThat(lines).hasSize(3)
+        assertThat(csv).contains("missing in target", "extra in target")
+    }
+
+    @Test
+    fun `markdown output for matching JARs`() {
+        val s = structure()
+        val report = ClassComparator.compare(mapOf(s.className to s), mapOf(s.className to s))
+        val md = report.markdown()
+        assertThat(md).contains("## Comparison Report")
+        assertThat(md).contains("| Differences | 0 |")
+        assertThat(md).contains("**OK:**")
+    }
+
+    @Test
+    fun `markdown output for mismatched JARs`() {
+        val ref = structure(methods = listOf(
+            ClassStructure.MethodInfo("foo", "()V", 1),
+        ))
+        val tgt = structure(methods = listOf(
+            ClassStructure.MethodInfo("foo", "()V", 1),
+            ClassStructure.MethodInfo("evil", "()V", 1),
+        ))
+        val report = ClassComparator.compare(
+            mapOf(ref.className to ref),
+            mapOf(tgt.className to tgt),
+        )
+        val md = report.markdown()
+        assertThat(md).contains("| class | change | symbol |")
+        assertThat(md).contains("method added")
+        assertThat(md).contains("evil")
+    }
+
+    @Test
+    fun `format method delegates correctly`() {
+        val s = structure()
+        val report = ClassComparator.compare(mapOf(s.className to s), mapOf(s.className to s))
+        assertThat(report.format(OutputFormat.TEXT)).isEqualTo(report.text())
+        assertThat(report.format(OutputFormat.CSV)).isEqualTo(report.csv())
+        assertThat(report.format(OutputFormat.MARKDOWN)).isEqualTo(report.markdown())
+    }
+
+    @Test
+    fun `OutputFormat parse`() {
+        assertThat(OutputFormat.parse("text")).isEqualTo(OutputFormat.TEXT)
+        assertThat(OutputFormat.parse("csv")).isEqualTo(OutputFormat.CSV)
+        assertThat(OutputFormat.parse("markdown")).isEqualTo(OutputFormat.MARKDOWN)
+        assertThat(OutputFormat.parse("md")).isEqualTo(OutputFormat.MARKDOWN)
+        assertThat(OutputFormat.parse("TEXT")).isEqualTo(OutputFormat.TEXT)
     }
 }

@@ -28,26 +28,28 @@ diff -rq downloads/untar/source/hadoop-3.5.0-src ../apache-hadoop
 What is not so straightforward is a binary comparison as different compilers may produce different artifacts.
 Note: this is a hypothesis.
 
-## Claude,when javac compilers compile java source, do they always produce byte for byte identical .class files                                                
+# The big question: 
+
+> Claude,when javac compilers compile java source, do they always produce byte for byte identical .class files                                                
                                                                                                         
-No. Java compilers are not guaranteed to produce byte-for-byte identical .class files across different runs or environments. Several factors can     
-  cause differences: 
-Across different compilers/versions:
-  - Different javac versions (e.g., JDK 11 vs JDK 17) can emit different bytecode, optimize differently, or use different constant pool ordering.      
-  - Different compiler implementations (e.g., Oracle javac vs Eclipse ECJ) produce structurally equivalent but binary-different output.
-
-  Even with the same compiler version:
-  - Constant pool ordering — the JLS and JVM spec don't mandate a specific order for constant pool entries. In practice, javac from the same JDK
-  version tends to be deterministic for the same input, but this is an implementation detail, not a guarantee.
-  - Attribute ordering — debug info, annotations, and other attributes may vary.
-  - Timestamps — .class files themselves don't contain timestamps, but JAR files do (in ZIP entry headers), which is why reproducible builds focus
-  heavily on JAR packaging.
-
-  In practice:
-  - The same javac version, on the same OS, with the same source files, same classpath, and same flags will typically produce identical .class files.
-  Most modern javac implementations are deterministic given identical inputs.
-  - But this is a de facto behavior, not a spec guarantee. The JVM specification defines the semantics of class files, not the exact binary encoding
-  compilers must produce.
+    No. Java compilers are not guaranteed to produce byte-for-byte identical .class files across different runs or environments. Several factors can     
+      cause differences: 
+    Across different compilers/versions:
+      - Different javac versions (e.g., JDK 11 vs JDK 17) can emit different bytecode, optimize differently, or use different constant pool ordering.      
+        - Different compiler implementations (e.g., Oracle javac vs Eclipse ECJ) produce structurally equivalent but binary-different output.
+    
+      Even with the same compiler version:
+      - Constant pool ordering — the JLS and JVM spec don't mandate a specific order for constant pool entries. In practice, javac from the same JDK
+      version tends to be deterministic for the same input, but this is an implementation detail, not a guarantee.
+        - Attribute ordering — debug info, annotations, and other attributes may vary.
+        - Timestamps — .class files themselves don't contain timestamps, but JAR files do (in ZIP entry headers), which is why reproducible builds focus
+        heavily on JAR packaging.
+    
+      In practice:
+      - The same javac version, on the same OS, with the same source files, same classpath, and same flags will typically produce identical .class files.
+      Most modern javac implementations are deterministic given identical inputs.
+        - But this is a de facto behavior, not a spec guarantee. The JVM specification defines the semantics of class files, not the exact binary encoding
+        compilers must produce.
 
  ---
 
@@ -68,8 +70,74 @@ This tool proposes to assist auditing with a goal of verifying that compiled art
  
 # Test JARs and provenance
 
-| path                       | provenance            |
-|----------------------------|-----------------------|
-| data/good/log4j-1.2.17.jar | cloudera sanitized    |
-| data/bad/log4j-1.2.17.jar  | original and insecure |
+
+| path                                | provenance            |
+|-------------------------------------|-----------------------|
+| data/good/log4j-1.2.17-cloudera.jar | cloudera sanitized    |
+| data/bad/log4j-1.2.17.jar           | original and insecure |
+
+## Log4j 1.2.17
+
+Cloudera ship a version of log4J 1, `log4j-1.2.17-cloudera.jar`, which removes the CVE-related 
+
+## Comparison Report
+
+| Metric            | Value |
+|-------------------|-------|
+| Reference classes | 315   |
+| Target classes    | 314   |
+| Differences       | 2     |
+
+| class                                        | change            | symbol                                      |
+|----------------------------------------------|-------------------|---------------------------------------------|
+| `org/apache/log4j/FilteredObjectInputStream` | missing in target |                                             |
+| `org/apache/log4j/net/SocketNode`            | method removed    | `getAllowedClasses()Ljava/util/Collection;` |
+
+
+# Hadoop 3.4.3
+
+This is the interesting one, which drove me to create the library.
+Historically we've always put the x86 artifacts up on maven, built on the x86 container, generally running within a linux VM on AWS or other cloud infrastructure. The Arm64 binaries were only ever shared as a .tar.gz file.
+
+For the 3.4.3 release, the AWS Nexus server seemed to generate multiple staging repositories from a single build,
+which was suggested as to be related to the work VPN within which the EC2 VMs were hosted.
+
+The solution here was to make the arm64 release the `-asfrelease` build which published to maven, as that was running on on local multicore workstation (a raspberry pi5), rather than cloud infra, so there was no VPN to interfere.
+And it worked!
+
+```
+
+java -jar build/libs/auditor-1.0-SNAPSHOT-all.jar -format markdown data/good/hadoop-common-3.4.3.jar data/bad/hadoop-common-3.4.3.jar
+Reference: data/good/hadoop-common-3.4.3.jar (MD5: a0eb52d25c35c2cd95d8147e7cffdf48)
+Target:    data/bad/hadoop-common-3.4.3.jar (MD5: c0c4819f052220f6caf9ba86464f2588)
+
+MD5 checksums differ. Performing structural comparison...
+```
+
+## Comparison Report
+
+## Comparison Report
+
+| Metric            | Value |
+|-------------------|-------|
+| Reference classes | 2640  |
+| Target classes    | 2640  |
+| Differences       | 9     |
+
+| class                                                                                | change             | symbol                                                                                                                        |
+|--------------------------------------------------------------------------------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto`          | superclass changed | `com/google/protobuf/GeneratedMessage -> com/google/protobuf/GeneratedMessage$ExtendableMessage`                              |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto`          | method removed     | `<init>(Lcom/google/protobuf/GeneratedMessage$Builder;)V`                                                                     |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto`          | method removed     | `<init>(Lcom/google/protobuf/GeneratedMessage$Builder;Lorg/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$1;)V`           |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto`          | method added       | `<init>(Lcom/google/protobuf/GeneratedMessage$ExtendableBuilder;)V`                                                           |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto`          | method added       | `<init>(Lcom/google/protobuf/GeneratedMessage$ExtendableBuilder;Lorg/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$1;)V` |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto$Builder`  | superclass changed | `com/google/protobuf/GeneratedMessage$Builder -> com/google/protobuf/GeneratedMessage$ExtendableBuilder`                      |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto$Builder`  | method added       | `clone()Lcom/google/protobuf/GeneratedMessage$ExtendableBuilder;`                                                             |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProto$Builder`  | method added       | `clear()Lcom/google/protobuf/GeneratedMessage$ExtendableBuilder;`                                                             |
+| `org/apache/hadoop/ipc/protobuf/ProtobufRpcEngineProtos$RequestHeaderProtoOrBuilder` | interfaces changed | `[com/google/protobuf/MessageOrBuilder] -> [com/google/protobuf/GeneratedMessage$ExtendableMessageOrBuilder]`                 |
+
+This highlights that 
+
+- protoc is behaving differently on the different images.
+- the tar.gz. images created are potentially incompatible at a binary level, that is: the jars must not be mixed.
 

@@ -94,15 +94,15 @@ object ClassComparator {
     }
 }
 
-enum class DifferenceType {
-    MISSING_IN_TARGET,
-    EXTRA_IN_TARGET,
-    SUPERCLASS_CHANGED,
-    INTERFACES_CHANGED,
-    METHOD_REMOVED,
-    METHOD_ADDED,
-    FIELD_REMOVED,
-    FIELD_ADDED,
+enum class DifferenceType(val text: String) {
+    MISSING_IN_TARGET("missing in target"),
+    EXTRA_IN_TARGET("extra in target"),
+    SUPERCLASS_CHANGED("superclass changed"),
+    INTERFACES_CHANGED("interfaces changed"),
+    METHOD_REMOVED("method removed"),
+    METHOD_ADDED("method added"),
+    FIELD_REMOVED("field removed"),
+    FIELD_ADDED("field added"),
 }
 
 data class ClassDifference(
@@ -118,19 +118,54 @@ data class ComparisonReport(
 ) {
     val isMatch: Boolean get() = differences.isEmpty()
 
-    fun summary(): String = buildString {
-        appendLine("# Reference classes: $referenceClassCount")
-        appendLine("# Target classes:    $targetClassCount")
-        appendLine("# Differences:       ${differences.size}")
-        if (differences.isEmpty()) {
-            appendLine("# OK: All classes match structurally.")
+    fun format(outputFormat: OutputFormat): String = when (outputFormat) {
+        OutputFormat.TEXT -> text()
+        OutputFormat.CSV -> csv()
+        OutputFormat.MARKDOWN -> markdown()
+    }
+
+    fun text(): String = buildString {
+        appendLine("Comparison Report")
+        appendLine("=================")
+        appendLine("Reference classes: $referenceClassCount")
+        appendLine("Target classes:    $targetClassCount")
+        appendLine("Differences:       ${differences.size}")
+        if (differences.isNotEmpty()) {
+            appendLine()
+            for (diff in differences) {
+                appendLine("  [${diff.type.text}] ${diff.className}: ${diff.symbol}")
+            }
+        } else {
+            appendLine()
+            appendLine("OK: All classes match structurally.")
         }
     }
 
     fun csv(): String = buildString {
         appendLine("\"class\",\"change\",\"symbol\"")
         for (diff in differences) {
-            appendLine("${csvField(diff.className)},${csvField(diff.type.name)},${csvField(diff.symbol)}")
+            appendLine("${csvField(diff.className)},${csvField(diff.type.text)},${csvField(diff.symbol)}")
+        }
+    }
+
+    fun markdown(): String = buildString {
+        appendLine("## Comparison Report")
+        appendLine()
+        appendLine("| Metric | Value |")
+        appendLine("|--------|-------|")
+        appendLine("| Reference classes | $referenceClassCount |")
+        appendLine("| Target classes | $targetClassCount |")
+        appendLine("| Differences | ${differences.size} |")
+        appendLine()
+        if (differences.isNotEmpty()) {
+            appendLine("| class | change | symbol |")
+            appendLine("|-------|--------|--------|")
+            for (diff in differences) {
+                val sym = if (diff.symbol.isNotEmpty()) "`${mdEscape(diff.symbol)}`" else ""
+                appendLine("| `${mdEscape(diff.className)}` | ${diff.type.text} | $sym |")
+            }
+        } else {
+            appendLine("**OK:** All classes match structurally.")
         }
     }
 
@@ -139,6 +174,23 @@ data class ComparisonReport(
             "\"${value.replace("\"", "\"\"")}\""
         } else {
             "\"$value\""
+        }
+    }
+
+    private fun mdEscape(value: String): String = value.replace("|", "\\|")
+}
+
+enum class OutputFormat {
+    TEXT, CSV, MARKDOWN;
+
+    companion object {
+        fun parse(value: String): OutputFormat = when (value.lowercase()) {
+            "text" -> TEXT
+            "csv" -> CSV
+            "markdown", "md" -> MARKDOWN
+            else -> throw IllegalArgumentException(
+                "Unknown format: '$value'. Valid values: text, csv, markdown"
+            )
         }
     }
 }
