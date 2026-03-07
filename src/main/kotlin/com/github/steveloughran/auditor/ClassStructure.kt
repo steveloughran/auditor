@@ -18,6 +18,7 @@ data class ClassStructure(
     val name: String,
     val descriptor: String,
     val access: Int,
+    val instructions: List<String> = emptyList(),
   )
 
   data class FieldInfo(

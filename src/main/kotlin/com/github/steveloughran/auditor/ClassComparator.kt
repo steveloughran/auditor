@@ -13,6 +13,7 @@ object ClassComparator {
   fun compare(
     reference: Map<String, ClassStructure>,
     target: Map<String, ClassStructure>,
+    level: AuditLevel = AuditLevel.STRUCTURAL,
   ): ComparisonReport {
     val differences = mutableListOf<ClassDifference>()
 
@@ -27,7 +28,7 @@ object ClassComparator {
       differences.add(ClassDifference(name, DifferenceType.EXTRA_IN_TARGET, ""))
     }
     for (name in common.sorted()) {
-      differences.addAll(compareClasses(name, reference[name]!!, target[name]!!))
+      differences.addAll(compareClasses(name, reference[name]!!, target[name]!!, level))
     }
 
     return ComparisonReport(
@@ -41,6 +42,7 @@ object ClassComparator {
     name: String,
     ref: ClassStructure,
     tgt: ClassStructure,
+    level: AuditLevel,
   ): List<ClassDifference> {
     val diffs = mutableListOf<ClassDifference>()
 
@@ -53,7 +55,7 @@ object ClassComparator {
         "${ref.interfaces.sorted()} -> ${tgt.interfaces.sorted()}"))
     }
 
-    compareMethods(name, ref.methods, tgt.methods, diffs)
+    compareMethods(name, ref.methods, tgt.methods, diffs, level)
     compareFields(name, ref.fields, tgt.fields, diffs)
 
     return diffs
@@ -64,15 +66,27 @@ object ClassComparator {
     refMethods: List<ClassStructure.MethodInfo>,
     tgtMethods: List<ClassStructure.MethodInfo>,
     diffs: MutableList<ClassDifference>,
+    level: AuditLevel,
   ) {
-    val refSet = refMethods.map { it.name to it.descriptor }.toSet()
-    val tgtSet = tgtMethods.map { it.name to it.descriptor }.toSet()
+    val refByKey = refMethods.associateBy { it.name to it.descriptor }
+    val tgtByKey = tgtMethods.associateBy { it.name to it.descriptor }
 
-    for ((name, desc) in refSet - tgtSet) {
-      diffs.add(ClassDifference(className, DifferenceType.METHOD_REMOVED, "$name$desc"))
+    for (key in refByKey.keys - tgtByKey.keys) {
+      diffs.add(ClassDifference(className, DifferenceType.METHOD_REMOVED, "${key.first}${key.second}"))
     }
-    for ((name, desc) in tgtSet - refSet) {
-      diffs.add(ClassDifference(className, DifferenceType.METHOD_ADDED, "$name$desc"))
+    for (key in tgtByKey.keys - refByKey.keys) {
+      diffs.add(ClassDifference(className, DifferenceType.METHOD_ADDED, "${key.first}${key.second}"))
+    }
+
+    if (level >= AuditLevel.BYTECODE) {
+      for (key in refByKey.keys.intersect(tgtByKey.keys)) {
+        val refMethod = refByKey[key]!!
+        val tgtMethod = tgtByKey[key]!!
+        if (refMethod.instructions != tgtMethod.instructions) {
+          diffs.add(ClassDifference(className, DifferenceType.BYTECODE_CHANGED,
+            "${key.first}${key.second}"))
+        }
+      }
     }
   }
 
@@ -103,6 +117,7 @@ enum class DifferenceType(val text: String) {
   METHOD_ADDED("method added"),
   FIELD_REMOVED("field removed"),
   FIELD_ADDED("field added"),
+  BYTECODE_CHANGED("bytecode changed"),
 }
 
 data class ClassDifference(

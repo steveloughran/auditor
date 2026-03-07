@@ -251,4 +251,64 @@ class ClassComparatorTest {
     assertThat(OutputFormat.parse("md")).isEqualTo(OutputFormat.MARKDOWN)
     assertThat(OutputFormat.parse("TEXT")).isEqualTo(OutputFormat.TEXT)
   }
+
+  @Test
+  fun `level 1 does not detect bytecode changes`() {
+    val ref = structure(methods = listOf(
+      ClassStructure.MethodInfo("foo", "()V", 1, listOf("ALOAD 0", "RETURN")),
+    ))
+    val tgt = structure(methods = listOf(
+      ClassStructure.MethodInfo("foo", "()V", 1, listOf("ALOAD 0", "NOP", "RETURN")),
+    ))
+    val report = ClassComparator.compare(
+      mapOf(ref.className to ref),
+      mapOf(tgt.className to tgt),
+      AuditLevel.STRUCTURAL,
+    )
+    assertThat(report.isMatch).isTrue()
+  }
+
+  @Test
+  fun `level 2 detects bytecode changes`() {
+    val ref = structure(methods = listOf(
+      ClassStructure.MethodInfo("foo", "()V", 1, listOf("ALOAD 0", "RETURN")),
+    ))
+    val tgt = structure(methods = listOf(
+      ClassStructure.MethodInfo("foo", "()V", 1, listOf("ALOAD 0", "NOP", "RETURN")),
+    ))
+    val report = ClassComparator.compare(
+      mapOf(ref.className to ref),
+      mapOf(tgt.className to tgt),
+      AuditLevel.BYTECODE,
+    )
+    assertThat(report.isMatch).isFalse()
+    assertThat(report.differences)
+      .anyMatch { it.type == DifferenceType.BYTECODE_CHANGED }
+    assertThat(report.differences)
+      .anyMatch { it.symbol.contains("foo") }
+  }
+
+  @Test
+  fun `level 2 identical bytecode matches`() {
+    val instructions = listOf("ALOAD 0", "INVOKEVIRTUAL java/lang/Object.hashCode()I", "IRETURN")
+    val ref = structure(methods = listOf(
+      ClassStructure.MethodInfo("foo", "()I", 1, instructions),
+    ))
+    val tgt = structure(methods = listOf(
+      ClassStructure.MethodInfo("foo", "()I", 1, instructions),
+    ))
+    val report = ClassComparator.compare(
+      mapOf(ref.className to ref),
+      mapOf(tgt.className to tgt),
+      AuditLevel.BYTECODE,
+    )
+    assertThat(report.isMatch).isTrue()
+  }
+
+  @Test
+  fun `AuditLevel parse`() {
+    assertThat(AuditLevel.parse("1")).isEqualTo(AuditLevel.STRUCTURAL)
+    assertThat(AuditLevel.parse("2")).isEqualTo(AuditLevel.BYTECODE)
+    assertThat(AuditLevel.parse("3")).isEqualTo(AuditLevel.SEMANTIC)
+  }
 }

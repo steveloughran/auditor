@@ -14,10 +14,20 @@ fun main(args: Array<String>) {
     }
   } ?: OutputFormat.TEXT
 
+  val level = extractOption(argList, "-level")?.let {
+    try {
+      AuditLevel.parse(it)
+    } catch (e: IllegalArgumentException) {
+      System.err.println(e.message)
+      exitProcess(1)
+    }
+  } ?: AuditLevel.STRUCTURAL
+
   if (argList.size != 2) {
-    System.err.println("Usage: auditor [-format text|csv|markdown] <reference.jar> <target.jar>")
+    System.err.println("Usage: auditor [-format text|csv|markdown] [-level 1|2|3] <reference.jar> <target.jar>")
     System.err.println()
     System.err.println("  -format        Output format: text (default), csv, markdown")
+    System.err.println("  -level         Audit level: 1=structural (default), 2=bytecode, 3=semantic")
     System.err.println("  reference.jar  JAR compiled from trusted source")
     System.err.println("  target.jar     JAR to audit (e.g. downloaded binary)")
     exitProcess(1)
@@ -47,12 +57,12 @@ fun main(args: Array<String>) {
   }
 
   System.err.println()
-  System.err.println("MD5 checksums differ. Performing structural comparison...")
+  System.err.println("MD5 checksums differ. Performing ${level.description}...")
 
-  val reference = JarAnalyzer.analyze(referencePath)
-  val target = JarAnalyzer.analyze(targetPath)
+  val reference = JarAnalyzer.analyze(referencePath, level)
+  val target = JarAnalyzer.analyze(targetPath, level)
 
-  val report = ClassComparator.compare(reference, target)
+  val report = ClassComparator.compare(reference, target, level)
   print(report.format(format))
 
   exitProcess(if (report.isMatch) 0 else 1)

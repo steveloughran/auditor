@@ -10,10 +10,6 @@ import java.util.jar.JarFile
 object JarAnalyzer {
 
   /**
-   * Parse all .class entries in a JAR, returning a map of
-   * class name (internal form, e.g. "com/example/Foo") to its structure.
-   */
-  /**
    * Compute the MD5 hex digest of a file.
    */
   fun md5(path: Path): String {
@@ -28,13 +24,20 @@ object JarAnalyzer {
     return digest.digest().joinToString("") { "%02x".format(it) }
   }
 
-  fun analyze(jarPath: Path): Map<String, ClassStructure> {
+  /**
+   * Parse all .class entries in a JAR, returning a map of
+   * class name (internal form, e.g. "com/example/Foo") to its structure.
+   */
+  fun analyze(
+    jarPath: Path,
+    level: AuditLevel = AuditLevel.STRUCTURAL,
+  ): Map<String, ClassStructure> {
     val result = mutableMapOf<String, ClassStructure>()
     JarFile(jarPath.toFile()).use { jar ->
       for (entry in jar.entries()) {
         if (entry.name.endsWith(".class")) {
           val bytes = jar.getInputStream(entry).use { it.readBytes() }
-          val structure = ClassFileParser.parse(bytes)
+          val structure = ClassFileParser.parse(bytes, level)
           result[structure.className] = structure
         }
       }

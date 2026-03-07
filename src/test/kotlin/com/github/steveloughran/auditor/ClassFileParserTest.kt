@@ -47,4 +47,40 @@ class ClassFileParserTest {
     val structure = ClassFileParser.parse(bytes)
     assertThat(structure.access and Opcodes.ACC_PUBLIC).isNotEqualTo(0)
   }
+
+  @Test
+  fun `level 1 does not capture instructions`() {
+    val bytes = Any::class.java.getResourceAsStream("/java/lang/Object.class")!!.readBytes()
+    val structure = ClassFileParser.parse(bytes, AuditLevel.STRUCTURAL)
+    for (method in structure.methods) {
+      assertThat(method.instructions).isEmpty()
+    }
+  }
+
+  @Test
+  fun `level 2 captures instructions`() {
+    val bytes = Any::class.java.getResourceAsStream("/java/lang/Object.class")!!.readBytes()
+    val structure = ClassFileParser.parse(bytes, AuditLevel.BYTECODE)
+    // Object has methods like hashCode(), equals(), toString() with actual bytecode
+    val nonAbstractMethods = structure.methods.filter {
+      it.access and Opcodes.ACC_ABSTRACT == 0 && it.access and Opcodes.ACC_NATIVE == 0
+    }
+    assertThat(nonAbstractMethods).isNotEmpty
+    for (method in nonAbstractMethods) {
+      assertThat(method.instructions)
+        .describedAs("instructions for ${method.name}")
+        .isNotEmpty
+    }
+  }
+
+  @Test
+  fun `level 2 instructions contain expected opcodes`() {
+    val bytes = String::class.java.getResourceAsStream("/${String::class.java.name.replace('.', '/')}.class")!!
+      .readBytes()
+    val structure = ClassFileParser.parse(bytes, AuditLevel.BYTECODE)
+    val lengthMethod = structure.methods.first { it.name == "length" }
+    assertThat(lengthMethod.instructions).isNotEmpty
+    // length() should have a RETURN-type instruction
+    assertThat(lengthMethod.instructions.last()).containsIgnoringCase("return")
+  }
 }
