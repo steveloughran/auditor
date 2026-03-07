@@ -1,44 +1,44 @@
 plugins {
-    kotlin("jvm") version "2.3.0"
-    application
+  kotlin("jvm") version "2.3.0"
+  application
 }
 
 group = "com.github.steveloughran"
 version = "1.0-SNAPSHOT"
 
 application {
-    mainClass.set("com.github.steveloughran.auditor.MainKt")
+  mainClass.set("com.github.steveloughran.auditor.MainKt")
 }
 
 repositories {
-    mavenCentral()
+  mavenCentral()
 }
 
 dependencies {
-    implementation("org.ow2.asm:asm:9.7.1")
-    testImplementation(kotlin("test"))
-    testImplementation("org.assertj:assertj-core:3.27.3")
+  implementation("org.ow2.asm:asm:9.7.1")
+  testImplementation(kotlin("test"))
+  testImplementation("org.assertj:assertj-core:3.27.3")
 }
 
 kotlin {
-    jvmToolchain(17)
+  jvmToolchain(17)
 }
 
 tasks.test {
-    useJUnitPlatform()
+  useJUnitPlatform()
 }
 
 tasks.register<Jar>("uberJar") {
-    archiveClassifier.set("all")
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest {
-        attributes["Main-Class"] = "com.github.steveloughran.auditor.MainKt"
-    }
-    from(sourceSets.main.get().output)
-    dependsOn(configurations.runtimeClasspath)
-    from({
-        configurations.runtimeClasspath.get()
-            .filter { it.name.endsWith(".jar") }
-            .map { zipTree(it) }
-    })
+  archiveClassifier.set("all")
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  manifest {
+    attributes["Main-Class"] = "com.github.steveloughran.auditor.MainKt"
+  }
+  from(sourceSets.main.get().output)
+  dependsOn(configurations.runtimeClasspath)
+  from({
+    configurations.runtimeClasspath.get()
+      .filter { it.name.endsWith(".jar") }
+      .map { zipTree(it) }
+  })
 }
