@@ -24,12 +24,12 @@ fun main(args: Array<String>) {
   } ?: AuditLevel.STRUCTURAL
 
   if (argList.size != 2) {
-    System.err.println("Usage: auditor [-format text|csv|markdown] [-level 1|2|3] <reference.jar> <target.jar>")
+    System.err.println("Usage: auditor [-format text|csv|markdown] [-level 1|2|3] <reference> <target>")
     System.err.println()
-    System.err.println("  -format        Output format: text (default), csv, markdown")
-    System.err.println("  -level         Audit level: 1=structural (default), 2=bytecode, 3=semantic")
-    System.err.println("  reference.jar  JAR compiled from trusted source")
-    System.err.println("  target.jar     JAR to audit (e.g. downloaded binary)")
+    System.err.println("  -format    Output format: text (default), csv, markdown")
+    System.err.println("  -level     Audit level: 1=structural (default), 2=bytecode, 3=semantic")
+    System.err.println("  reference  JAR file or directory of JARs (trusted source)")
+    System.err.println("  target     JAR file or directory of JARs (under audit)")
     exitProcess(1)
   }
 
@@ -37,14 +37,35 @@ fun main(args: Array<String>) {
   val targetPath = Path.of(argList[1])
 
   if (!referencePath.toFile().exists()) {
-    System.err.println("Reference JAR not found: $referencePath")
+    System.err.println("Reference not found: $referencePath")
     exitProcess(1)
   }
   if (!targetPath.toFile().exists()) {
-    System.err.println("Target JAR not found: $targetPath")
+    System.err.println("Target not found: $targetPath")
     exitProcess(1)
   }
 
+  val refIsDir = referencePath.toFile().isDirectory
+  val tgtIsDir = targetPath.toFile().isDirectory
+
+  if (refIsDir != tgtIsDir) {
+    System.err.println("Both arguments must be either files or directories")
+    exitProcess(1)
+  }
+
+  if (refIsDir) {
+    compareDirectories(referencePath, targetPath, level, format)
+  } else {
+    compareJars(referencePath, targetPath, level, format)
+  }
+}
+
+private fun compareJars(
+  referencePath: Path,
+  targetPath: Path,
+  level: AuditLevel,
+  format: OutputFormat,
+) {
   val refMd5 = JarAnalyzer.md5(referencePath)
   val tgtMd5 = JarAnalyzer.md5(targetPath)
   System.err.println("Reference: $referencePath (MD5: $refMd5)")
@@ -63,6 +84,27 @@ fun main(args: Array<String>) {
   val target = JarAnalyzer.analyze(targetPath, level)
 
   val report = ClassComparator.compare(reference, target, level)
+  print(report.format(format))
+
+  exitProcess(if (report.isMatch) 0 else 1)
+}
+
+private fun compareDirectories(
+  referenceDir: Path,
+  targetDir: Path,
+  level: AuditLevel,
+  format: OutputFormat,
+) {
+  System.err.println("Reference directory: $referenceDir")
+  System.err.println("Target directory:    $targetDir")
+  System.err.println("Audit level:         ${level.description}")
+  System.err.println()
+
+  val report = DirectoryScanner.compareDirectories(referenceDir, targetDir, level)
+
+  System.err.println("Found ${report.referenceJarCount} JAR(s) in reference, ${report.targetJarCount} in target")
+  System.err.println()
+
   print(report.format(format))
 
   exitProcess(if (report.isMatch) 0 else 1)
