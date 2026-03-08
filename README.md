@@ -29,6 +29,7 @@ What is not so straightforward is a binary comparison as different compilers may
 
 We are lucky here in that hadoop has two parallel built releases, x86 and arm, which can and should be compared to see how they vary.
 
+[Full analysis of the hadoop 3.4.3 x86 and aarch64 distributions](src/site/hadoop3.4.3-x86-vs-aarch.md).
 
 # The initial question: 
 

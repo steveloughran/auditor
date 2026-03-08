@@ -46,4 +46,3 @@ Algorithm
 
 make the output csv formatted with headers "class", "change", "symbol", with contents as appropriate 
 
-whenever I say "build", create the uber jar

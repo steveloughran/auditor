@@ -12,8 +12,17 @@
   limitations under the License. See accompanying LICENSE file.
 -->
 
-# Reelase
+# Release
 
+In `build.gradle.kts`: set `version` to the release version.
+
+Release and publish
+```bash
+./gradlew clean uberJar githubRelease -PreleaseNotes="<insert release notes here>" 
 ```
-./gradlew githubRelease -PreleaseNotes="First public release with level 1-3 auditing" 
+
+In `build.gradle.kts`: set `version` to the next snapshot version.
+
+```bash
+./gradlew clean
 ```
